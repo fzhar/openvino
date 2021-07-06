@@ -197,18 +197,15 @@ int main(int argc, char* argv[]) {
                     std::ostringstream conf;
                     conf << ":" << std::fixed << std::setprecision(3) << confidence;
                     cv::rectangle(image, cv::Point2f(xmin, ymin), cv::Point2f(xmax, ymax), cv::Scalar(0, 0, 255));
-                    std::cout << "[" << cur_proposal << "," << label << "] element, prob = " << confidence << ", bbox = (" << xmin << "," << ymin << ")-(" << xmax
+                    std::cout << frame_num << " [" << cur_proposal << "," << label << "] element, prob = " << confidence << ", bbox = (" << xmin << "," << ymin << ")-(" << xmax
                             << "," << ymax << ")"
-                            << ", batch id = " << image_id << std::endl;
+                            << std::endl;
                 }
             }
 
             // --- Step 7d. Writing frame to output video
             writer.write(image);
             frame_num++;
-            if(frame_num % 20) {
-                std::cout<<".";
-            }
 
             // --- Step 7e. Reading next frame
             keep_running = decoder.read(decoded_frame);
