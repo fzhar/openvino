@@ -47,27 +47,39 @@ To run the sample, you need specify a model and input video file:
 >
 > - The sample accepts models in ONNX format (\*.onnx) that do not require preprocessing.
 
-You can use the following command to do inference on CPU of an image using a trained SSD network:
+### Example
+1. Download a pre-trained model using [Model Downloader](@ref omz_tools_downloader_README):
+```
+python <path_to_omz_tools>/downloader.py --name ssd_mobilenet_v1_coco
+```
+
+2. If a model is not in the Inference Engine IR or ONNX format, it must be converted. You can do this using the model converter script:
+
+```
+python <path_to_omz_tools>/converter.py --name ssd_mobilenet_v1_coco
+```
+
+3. Use the following command to do inference on GPU of a video using a trained SSD network:
 
 ```sh
 hello_va_object_detection_ssd <path_to_model> <path_to_video>
 ```
 
-with path to video file and [person-detection-retail-0013](https://docs.openvinotoolkit.org/latest/omz_models_intel_person_detection_retail_0013_description_person_detection_retail_0013.html) model
+with path to video file and [ssd_mobilenet_v1_coco](https://docs.openvinotoolkit.org/latest/omz_models_model_ssd_mobilenet_v1_coco.html) model
 
 ```sh
-hello_va_object_detection_ssd <path_to_model>/person-detection-retail-0013.xml <path_to_video>/inputVideo.mp4
+hello_va_object_detection_ssd <path_to_model>/ssd_mobilenet_v1_coco.xml <path_to_video>/inputVideo.mp4
 ```
 
 ## Sample Output
 
-The application writes mjpg video file with detected objects enclosed in rectangles. It outputs the list of classes of the detected objects along with the respective confidence values and the coordinates of the rectangles to the standard output stream.
+The application writes MJPG video file with detected objects enclosed in rectangles. It outputs the list of classes of the detected objects along with the respective confidence values and the coordinates of the rectangles to the standard output stream.
 
 ```sh
-hello_va_object_detection_ssd person-detection-retail-0013/FP16/person-detection-retail-0013.xml inputVideo.mp4
+hello_va_object_detection_ssd person-detection-retail-0013/FP16/ssd_mobilenet_v1_coco.xml inputVideo.mp4
 
-Resulting input shape = [1,3,320,544]
-Resulting output shape = [1,1,200,7]
+Resulting input shape = [1,3,300,300]
+Resulting output shape = [1,1,100,7]
 VA-API version 1.11.0
 
 User environment variable requested driver 'iHD'
@@ -77,33 +89,30 @@ Trying to open /opt/intel/mediasdk/lib64/iHD_drv_video.so
 va_openDriver() returns 0
 
 Going to link Demux and Parser
-Going to link Demux and Parser
-Processing video 
-0 [0,1] element, prob = 0.528809, bbox = (978.647,173.295)-(1225.8,780.653)
-1 [0,1] element, prob = 0.566895, bbox = (1341.04,533.854)-(1444.96,800.08)
-1 [1,1] element, prob = 0.541016, bbox = (757.027,549.43)-(869.127,800.135)
-2 [0,1] element, prob = 0.708984, bbox = (1345.85,512.396)-(1449.06,803.336)
-4 [0,1] element, prob = 0.82959, bbox = (1320.37,503.603)-(1431.64,795.653)
-9 [0,1] element, prob = 0.94043, bbox = (884.536,565.753)-(995.223,797.401)
-9 [1,1] element, prob = 0.535156, bbox = (760.536,558.299)-(878.711,795.652)
-11 [0,1] element, prob = 0.650879, bbox = (890.801,537.985)-(1046.12,795.818)
-18 [0,1] element, prob = 0.844727, bbox = (961.421,153.04)-(1121.84,459.374)
-18 [1,1] element, prob = 0.539062, bbox = (934.218,622.477)-(1021.39,801.726)
-19 [0,1] element, prob = 0.913574, bbox = (959.474,142.192)-(1117.74,447.63)
-19 [1,1] element, prob = 0.667969, bbox = (1005.37,150.718)-(1187.58,508.281)
-20 [0,1] element, prob = 0.853516, bbox = (957.201,136.085)-(1121.88,448.934)
-20 [1,1] element, prob = 0.853516, bbox = (833.783,535.044)-(915.237,798.918)
-20 [2,1] element, prob = 0.647949, bbox = (904.83,562.651)-(1001.86,799.35
+Processing video
+23 [0,19] element, prob = 0.52002, bbox = (893.534,155.55)-(1313.18,800)
+24 [0,19] element, prob = 0.667969, bbox = (900.63,168.958)-(1297.15,800)
+25 [0,19] element, prob = 0.720703, bbox = (892.454,159.218)-(1260.88,800)
+26 [1,27] element, prob = 0.675293, bbox = (950.651,198.368)-(1236.63,428.756)
+27 [0,1] element, prob = 0.539062, bbox = (940.214,146.898)-(1239.83,782.549)
+28 [0,1] element, prob = 0.665527, bbox = (929.375,156.362)-(1227.07,800)
+29 [0,1] element, prob = 0.600098, bbox = (897.009,162.408)-(1216.04,800)
+30 [0,19] element, prob = 0.632324, bbox = (851.171,186.064)-(1219.76,788.946)
+31 [0,19] element, prob = 0.544434, bbox = (737.024,189.676)-(1207.35,787.597)
+32 [0,19] element, prob = 0.53125, bbox = (757.195,184.319)-(1227.7,786.459)
+33 [0,1] element, prob = 0.59668, bbox = (898.113,170.464)-(1231.38,794.552)
+36 [0,19] element, prob = 0.515137, bbox = (900.896,164.754)-(1238.69,800)
+37 [0,1] element, prob = 0.602539, bbox = (930.521,197.939)-(1220.69,797.533)
+38 [0,1] element, prob = 0.783691, bbox = (913.483,193.347)-(1222.67,791.42)
+46 [0,1] element, prob = 0.520996, bbox = (907.94,346.572)-(1181.06,795.077)
+48 [0,1] element, prob = 0.640625, bbox = (829.31,410.08)-(1287.35,790.787)
 ...
-997 [0,1] element, prob = 0.926758, bbox = (1282.26,330.531)-(1446.75,750.631)
-997 [1,1] element, prob = 0.859863, bbox = (1068.61,437.713)-(1309.69,799.561)
-997 [2,1] element, prob = 0.747559, bbox = (340.615,372.104)-(573.225,796.316)
-998 [0,1] element, prob = 0.9375, bbox = (1286.3,332.543)-(1447.63,739.889)
-998 [1,1] element, prob = 0.918457, bbox = (1069.63,439.769)-(1308.97,801.97)
-998 [2,1] element, prob = 0.858887, bbox = (348.487,368.039)-(554.498,794.911)
-999 [0,1] element, prob = 0.936035, bbox = (1287.76,326.534)-(1449.67,740.98)
-999 [1,1] element, prob = 0.922363, bbox = (1059.18,440.228)-(1310.54,802.218)
-999 [2,1] element, prob = 0.742676, bbox = (340.102,375.159)-(561.801,798.802)
+977 [0,1] element, prob = 0.523438, bbox = (198.33,271.002)-(650.132,760.953)
+990 [0,1] element, prob = 0.524902, bbox = (625.645,427.941)-(823.217,727.706)
+991 [0,1] element, prob = 0.525879, bbox = (329.455,351.062)-(607.585,792.528)
+993 [0,1] element, prob = 0.520508, bbox = (538.617,348.751)-(837.473,751.732)
+997 [0,1] element, prob = 0.59668, bbox = (539.594,368.884)-(846.195,754.577)
+999 [0,1] element, prob = 0.586914, bbox = (524.67,373.395)-(841.19,767.772)
 EOS received
 ```
 
