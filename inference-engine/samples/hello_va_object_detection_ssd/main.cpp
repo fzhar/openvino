@@ -62,6 +62,7 @@ int main(int argc, char* argv[]) {
         // Set input layout and precision
         input_info->setLayout(Layout::NCHW);
         input_info->setPrecision(Precision::U8);
+        // Setting input color format for automated conversion (NV12 provided to input will be automatically converted to model's color format)
         input_info->getPreProcess().setColorFormat(ColorFormat::NV12);
 
         // --------------------------- Prepare output blobs
@@ -111,10 +112,12 @@ int main(int argc, char* argv[]) {
         std::cout << "Resulting output shape = " << dumpVec(output_shape) << std::endl;
         // -----------------------------------------------------------------------------------------------------
 
-        // --------------------------- Step 4. Configuring  model to be used with remote context
+        // --------------------------- Step 4. Load model
         // ------------------------------------------
         std::map<std::string, std::string> exec_network_config;
+        // Setting number of simulatneously processing streams to 1 due to limitations of shared context operations
         exec_network_config.emplace(CONFIG_KEY(GPU_THROUGHPUT_STREAMS), "1");
+        // Setting input color format for automated conversion (NV12 provided to input will be automatically converted to model's color format)
         exec_network_config.emplace(InferenceEngine::GPUConfigParams::KEY_GPU_NV12_TWO_INPUTS,
             InferenceEngine::PluginConfigParams::YES);
 
@@ -124,21 +127,22 @@ int main(int argc, char* argv[]) {
         ExecutableNetwork executable_network = ie.LoadNetwork(network, sharedContext, exec_network_config);
         // -----------------------------------------------------------------------------------------------------
 
-        // --------------------------- Step 5. Create an infer request
+        // --------------------------- Step 5. Create Infer request
         // -------------------------------------------------
         InferRequest infer_request = executable_network.CreateInferRequest();
         // -----------------------------------------------------------------------------------------------------
 
-        //----------------------------- Step 6. Preparing Video Decoding and Processing objects ----------------
+        //----------------------------- Preparing Video Decoding and Processing objects ----------------
         GstVaApiDecoder decoder;
         VaApiImage::Ptr decoded_frame;
 
         decoder.open(input_video_path);
         decoder.play();
 
-        // --------------------------- Step 6. Reading first frame, preparing video writer using its parameters
+        // --------------------------- Step 6. Prepare input
         // --------------------------------------------------------
 
+        // --- Reading first frame
         bool keep_running = decoder.read(decoded_frame); // We have to read first frame in advance to get FPS and frame size
         
         cv::VideoWriter writer;
@@ -147,23 +151,22 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error("Cannot open "+output_filename);
         }
 
-        // --------------------------- Step 7. Main cycle - performing inference, showing result, reading next frame
-        // --------------------------------------------------------
+        // --- Main processing cycle
         std::cout<<"Processing video "<<std::endl;
         int frame_num = 0;
         while (keep_running) {
             
-            // --- Step 7a. Resizing image to network's input size and putting it into blob
+            // --- Resizing image to network's input size and putting it into blob
             auto resizedImg = decoded_frame->cloneToAnotherContext(vaContext)->
                 resizeUsingPooledSurface(input_shape[3],input_shape[2], RESIZE_FILL,false);
             infer_request.SetBlob(input_name,
                 InferenceEngine::gpu::make_shared_blob_nv12(input_shape[2], input_shape[3],
                 sharedContext, resizedImg->va_surface_id));
 
-            // --- Step 7b. Do inference
+            // --- Step 7. Infer
             infer_request.Infer();
 
-            // --- Step 7c. Process output
+            // --- Step 8. Process output
             cv::Mat image = decoded_frame->copyToMat();
             Blob::Ptr output = infer_request.GetBlob(output_name);
             MemoryBlob::CPtr moutput = as<MemoryBlob>(output);
@@ -176,13 +179,11 @@ int main(int argc, char* argv[]) {
             auto moutputHolder = moutput->rmap();
             const float* detection = moutputHolder.as<const float*>();
 
-            /* Each detection has image_id that denotes processed image */
+            // Each detection has image_id that denotes processed image
             for (size_t cur_proposal = 0; cur_proposal < max_proposal_count; cur_proposal++) {
                 float image_id = detection[cur_proposal * object_size + 0];
                 float label = detection[cur_proposal * object_size + 1];
                 float confidence = detection[cur_proposal * object_size + 2];
-                /* CPU and GPU devices have difference in DetectionOutput layer, so we
-                * need both checks */
                 if (image_id < 0 || confidence == 0.0f) {
                     continue;
                 }
@@ -203,11 +204,11 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            // --- Step 7d. Writing frame to output video
+            // --- Writing frame to output video
             writer.write(image);
             frame_num++;
 
-            // --- Step 7e. Reading next frame
+            // --- Reading next frame
             keep_running = decoder.read(decoded_frame);
         }
 

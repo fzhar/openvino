@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2019 Intel Corporation
+# Copyright (C) 2018-2021 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 #
 
@@ -11,6 +11,7 @@ pkg_search_module (VADRM va-drm libva-drm REQUIRED)
 find_package(InferenceEngine REQUIRED COMPONENTS inference_engine_c_api)
 
 find_package (OpenCV REQUIRED core)
+find_package(OpenCL REQUIRED)
 
 FILE(GLOB SOURCES ./src/*.cpp)
 FILE(GLOB HEADERS ./include/*.h)
@@ -32,6 +33,6 @@ target_link_libraries(va_video PRIVATE ${VA_LIBRARIES}
         ${VA_LIBRARIES}
         ${VADRM_LIBRARIES}
 	${InferenceEngine_LIBRARIES}
-        /usr/lib/x86_64-linux-gnu/libOpenCL.so
+        ${OpenCL_LIBRARY}
         opencv_core opencv_imgproc
 )

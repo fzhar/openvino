@@ -1,8 +1,11 @@
-/*******************************************************************************
- * Copyright (C) 2019-2020 Intel Corporation
- *
- * SPDX-License-Identifier: MIT
- ******************************************************************************/
+// Copyright (C) 2018-2021 Intel Corporation
+// SPDX-License-Identifier: Apache-2.0
+//
+
+/**
+ * \brief VA API conext class (VA display, contexts, config and surfaces pool in one place)
+ * \file vaapi_context.h
+ */
 
 #pragma once
 
@@ -17,7 +20,7 @@
 #include <cstdint>
 #include <type_traits>
 #include <memory>
-#include <vaapi_image_pool.h>
+#include <va_surfaces_pool.h>
 
 class VaApiContext
 {
