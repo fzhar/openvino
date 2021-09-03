@@ -25,7 +25,7 @@
 class GstVaApiDecoder
 {
 public:
-    GstVaApiDecoder();
+    GstVaApiDecoder(int outWidth, int outHeight);
     ~GstVaApiDecoder();
 
 public:
@@ -48,9 +48,15 @@ private:
     GstElement* parser_;
     GstElement* dec_;
     GstElement* capsfilter_;
+    GstElement* postproc_;
+    GstElement* capsfilter2_;
+    
     GstElement* queue_;
     GstElement* app_sink_;
 
     GstVideoInfo* video_info_;
     double fps;
+
+    size_t outWidth;
+    size_t outHeight;
 };

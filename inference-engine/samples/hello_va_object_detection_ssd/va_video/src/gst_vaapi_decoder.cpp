@@ -129,10 +129,11 @@ std::shared_ptr<VaApiImage> GstVaApiDecoder::CreateImage(GstSample* sample, GstM
 }
 
 
-GstVaApiDecoder::GstVaApiDecoder()
+GstVaApiDecoder::GstVaApiDecoder(int outWidth, int outHeight)
     : pipeline_(nullptr), file_source_(nullptr), demux_(nullptr)
     , parser_(nullptr), dec_(nullptr), capsfilter_(nullptr)
     , queue_(nullptr), app_sink_(nullptr), video_info_(nullptr), fps(0)
+    , outWidth(outWidth), outHeight(outHeight)
 {
 
 }
@@ -154,35 +155,48 @@ void GstVaApiDecoder::open(const std::string &filename, bool sync)
     GstElement* parser = gst_element_factory_make("h264parse", "parser");
     GstElement* dec = gst_element_factory_make("vaapih264dec", "dec");
     GstElement* capsfilter = gst_element_factory_make("capsfilter", "capsfilter");
+    GstElement* postproc = gst_element_factory_make("vaapipostproc", "vaapipostproc");
+    GstElement* capsfilter2 = gst_element_factory_make("capsfilter", "capsfilter2");
     GstElement* queue = gst_element_factory_make("queue", "queue");
     GstElement* app_sink = gst_element_factory_make("appsink", "appsink");
 
-    if(!pipeline || !file_source || !demux || !parser || !dec || !capsfilter || !app_sink || !queue)
+    if(!pipeline || !file_source || !demux || !capsfilter || !capsfilter2 || !postproc || !app_sink || !queue)
     {
-        throw std::runtime_error("Fail to make one of the gstreamer plugins!");
+        throw std::runtime_error("Failed to make one of the gstreamer plugins!");
     }
 
-    GstCaps* caps = gst_caps_from_string("video/x-raw(memory:VASurface), format=(string)NV12");
+    GstCaps* caps = gst_caps_from_string("video/x-raw(memory:VASurface)");
     if (!caps)
     {
-        throw std::runtime_error("Fail to make gst caps");
+        throw std::runtime_error("Failed to make gst caps");
     }
 
     g_object_set(capsfilter, "caps", caps, NULL);
     gst_caps_unref (caps);
 
+
+    GstCaps* caps2 = gst_caps_from_string((std::string("video/x-raw(memory:VASurface),format=(string)NV12,width=")+
+        std::to_string(outWidth)+",height="+std::to_string(outHeight)).c_str());
+    if (!caps2)
+    {
+        throw std::runtime_error("Fail to make gst caps");
+    }
+
+    g_object_set(capsfilter2, "caps", caps2, NULL);
+    gst_caps_unref (caps2);
+
     g_object_set(file_source, "location", filename.c_str(), NULL);
     g_object_set(app_sink, "sync", sync, NULL);
 
-    gst_bin_add_many(GST_BIN(pipeline), file_source, demux, parser, dec, capsfilter, queue, app_sink, NULL);
+    gst_bin_add_many(GST_BIN(pipeline), file_source, demux, parser, dec, capsfilter, postproc, capsfilter2, queue, app_sink, NULL);
 
     if(!gst_element_link_many(file_source, demux, NULL))
     {
-        throw std::runtime_error("Fail to link file src to demux");
+        throw std::runtime_error("Failed to link file src to demux");
     }
-    if(!gst_element_link_many(parser, dec, capsfilter, queue, app_sink, NULL))
+    if(!gst_element_link_many(parser, dec , postproc, capsfilter2, queue, app_sink, NULL))
     {
-        throw std::runtime_error("Fail to link gst plugins");
+        throw std::runtime_error("Failed to link gst plugins");
     }
 
     g_signal_connect(demux, "pad-added", G_CALLBACK(on_demux_new_pad), parser);
@@ -193,6 +207,8 @@ void GstVaApiDecoder::open(const std::string &filename, bool sync)
     parser_      = parser;
     dec_         = dec;
     capsfilter_  = capsfilter;
+    postproc_    = postproc;
+    capsfilter2_ = capsfilter2;
     queue_       = queue;
     app_sink_    = app_sink;
 }

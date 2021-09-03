@@ -121,7 +121,18 @@ int main(int argc, char* argv[]) {
         exec_network_config.emplace(InferenceEngine::GPUConfigParams::KEY_GPU_NV12_TWO_INPUTS,
             InferenceEngine::PluginConfigParams::YES);
 
-        auto vaContext = std::make_shared<VaApiContext>(ie);
+        //----------------------------- Preparing Video Decoding and Processing objects ----------------
+        GstVaApiDecoder decoder(input_shape[2],input_shape[3]);
+        VaApiImage::Ptr decoded_frame;
+
+        decoder.open(input_video_path);
+        decoder.play();
+
+        // --- Reading first frame
+        bool keep_running = decoder.read(decoded_frame); // We have to read first frame in advance to get FPS and frame size
+
+        auto& vaContext = decoded_frame->context;
+        vaContext->createSharedContext(ie);
         auto sharedContext = vaContext->sharedContext();
 
         ExecutableNetwork executable_network = ie.LoadNetwork(network, sharedContext, exec_network_config);
@@ -132,18 +143,9 @@ int main(int argc, char* argv[]) {
         InferRequest infer_request = executable_network.CreateInferRequest();
         // -----------------------------------------------------------------------------------------------------
 
-        //----------------------------- Preparing Video Decoding and Processing objects ----------------
-        GstVaApiDecoder decoder;
-        VaApiImage::Ptr decoded_frame;
-
-        decoder.open(input_video_path);
-        decoder.play();
-
         // --------------------------- Step 6. Prepare input
         // --------------------------------------------------------
 
-        // --- Reading first frame
-        bool keep_running = decoder.read(decoded_frame); // We have to read first frame in advance to get FPS and frame size
         
         cv::VideoWriter writer;
         if(!writer.open(output_filename, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'),decoder.getFPS(),
@@ -157,8 +159,8 @@ int main(int argc, char* argv[]) {
         while (keep_running) {
             
             // --- Resizing image to network's input size and putting it into blob
-            auto resizedImg = decoded_frame->cloneToAnotherContext(vaContext)->
-                resizeUsingPooledSurface(input_shape[3],input_shape[2], RESIZE_FILL,false);
+            auto resizedImg = decoded_frame;//->cloneToAnotherContext(vaContext);//->
+//                resizeUsingPooledSurface(input_shape[3],input_shape[2], RESIZE_FILL,false);
             infer_request.SetBlob(input_name,
                 InferenceEngine::gpu::make_shared_blob_nv12(input_shape[2], input_shape[3],
                 sharedContext, resizedImg->va_surface_id));
