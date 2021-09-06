@@ -109,8 +109,13 @@ cv::Mat VaApiImage::copyToMat(IMG_CONVERSION_TYPE convType) {
     switch(format) {
         case FOURCC_NV12:
         case FOURCC_I420:
-            mappedMat = cv::Mat(mappedImage.height*3/2,mappedImage.width,CV_8UC1,pData,{mappedImage.pitches[0]});
+        {
+            // NV12 image might be aligned by height to 16 or 32, so during conversion it should use actual width first
+            // (to avoid gaps between Y and UV), and then it should be clipped to actual height
+            int alignedRows = mappedImage.offsets[1] / mappedImage.pitches[0];
+            mappedMat = cv::Mat(alignedRows*3/2,mappedImage.width,CV_8UC1,pData,mappedImage.pitches[0]);
             break;
+        }
         default:
             throw std::invalid_argument("VAApiImage Map: non-supported FOURCC encountered");
     }
@@ -136,7 +141,7 @@ cv::Mat VaApiImage::copyToMat(IMG_CONVERSION_TYPE convType) {
         std::cout << error_message.c_str() << std::endl;
     }
 
-    return outMat;
+    return outMat(cv::Rect(0,0,mappedImage.width,mappedImage.height));
 }
 
 VaApiImage::Ptr VaApiImage::resizeUsingPooledSurface(uint16_t width, uint16_t height, IMG_RESIZE_MODE resizeMode, bool hqResize) {
