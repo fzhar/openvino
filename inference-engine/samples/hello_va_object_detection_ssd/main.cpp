@@ -16,7 +16,7 @@
 using namespace InferenceEngine;
 
 int main(int argc, char* argv[]) {
-    const std::string output_filename = "hello_va_object_detection_output.mjpg";
+    const std::string output_filename = "out/hello_va_object_detection_output.avi";
     try {
         // ------------------------------ Parsing and validation of input arguments
         // ---------------------------------

@@ -20,7 +20,7 @@
 #include <cstdint>
 #include <type_traits>
 #include <memory>
-#include <va_surfaces_pool.h>
+#include <fourcc.h>
 
 class VaApiContext
 {
@@ -54,14 +54,11 @@ class VaApiContext
       return gpuSharedContext;
     }
 
-    VaSurfacesPool& getSurfacesPool(){ return *surfacesPool;}
-
     static VASurfaceID createSurface(VADisplay display, uint16_t width, uint16_t height, FourCC format);
 
   private:
     void create(VADisplay display);
     void close();
-    std::unique_ptr<VaSurfacesPool> surfacesPool;
 
     static void messageErrorCallback(void *, const char *message);
     static void messageInfoCallback(void *, const char *message);

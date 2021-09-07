@@ -102,8 +102,6 @@ void VaApiContext::create(VADisplay display) {
         close();
         throw std::invalid_argument("Could not create VA context. Cannot initialize VaApiContext without VA context.");
     }
-
-    surfacesPool = std::unique_ptr<VaSurfacesPool>(new VaSurfacesPool(vaDisplay));
 }
 
 VaApiContext::~VaApiContext() {

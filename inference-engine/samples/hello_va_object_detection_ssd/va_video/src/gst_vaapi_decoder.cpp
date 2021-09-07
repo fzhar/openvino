@@ -71,11 +71,8 @@ std::unique_ptr<VaApiImage> GstVaApiDecoder::bufferToImage(GstBuffer *buffer)
             static_cast<uint32_t>(GST_VIDEO_INFO_WIDTH(video_info_)),
             static_cast<uint32_t>(GST_VIDEO_INFO_HEIGHT(video_info_)),
             static_cast<FourCC>(gstFormatToFourCC(GST_VIDEO_INFO_FORMAT(video_info_))),
-            reinterpret_cast<uint64_t>(gst_mini_object_get_qdata(&buffer->mini_object, g_quark_from_static_string("VASurfaceID"))),
-            false
+            reinterpret_cast<uint64_t>(gst_mini_object_get_qdata(&buffer->mini_object, g_quark_from_static_string("VASurfaceID")))
             ));
-
-//!!!            std::cout<<"GS img:"<<reinterpret_cast<uint64_t>(gst_mini_object_get_qdata(&buffer->mini_object, g_quark_from_static_string("VASurfaceID")))<<std::endl;
 
         // getting data from VA_API
         if (!image->context->display()) {
