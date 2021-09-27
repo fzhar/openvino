@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#include "vaapi_images.h"
+#include "vaapi_image.h"
 #include <iostream>
 #include <unistd.h>
 #include <opencv2/imgproc.hpp>

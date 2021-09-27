@@ -20,7 +20,7 @@
 #include <gst/video/video.h>
 #include "vaapi_context.h"
 
-#include "vaapi_images.h"
+#include "vaapi_image.h"
 
 class GstVaApiDecoder
 {
