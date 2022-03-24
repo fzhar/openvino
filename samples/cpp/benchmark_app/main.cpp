@@ -421,7 +421,7 @@ int main(int argc, char* argv[]) {
         size_t batchSize = FLAGS_b;
         ov::element::Type type = ov::element::undefined;
         std::string topology_name = "";
-        std::vector<benchmark_app::InputsInfo> app_inputs_info;
+        std::vector<InputCfgInputsInfo> app_inputs_info;
         std::string output_name;
 
         // Takes priority over config from file
@@ -503,7 +503,7 @@ int main(int argc, char* argv[]) {
                                               inputInfo,
                                               reshape);
             if (reshape) {
-                benchmark_app::PartialShapes shapes = {};
+                InputCfgPartialShapes shapes = {};
                 for (auto& item : app_inputs_info[0])
                     shapes[item.first] = item.second.partialShape;
                 slog::info << "Reshaping network: " << get_shapes_string(shapes) << slog::endl;
@@ -596,7 +596,7 @@ int main(int argc, char* argv[]) {
             auto input_info = app_inputs_info[0];
             isDynamicNetwork = std::any_of(input_info.begin(),
                                            input_info.end(),
-                                           [](const std::pair<std::string, benchmark_app::InputInfo>& i) {
+                                           [](const std::pair<std::string, InputCfgInputCfg>& i) {
                                                return i.second.partialShape.is_dynamic();
                                            });
 
@@ -984,7 +984,7 @@ int main(int argc, char* argv[]) {
                     batchSize = get_batch_size(inputs);
                     if (!std::any_of(inputs.begin(),
                                      inputs.end(),
-                                     [](const std::pair<const std::string, benchmark_app::InputInfo>& info) {
+                                     [](const std::pair<const std::string, InputCfgInputCfg>& info) {
                                          return ov::layout::has_batch(info.second.layout);
                                      })) {
                         slog::warn

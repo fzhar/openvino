@@ -9,6 +9,8 @@
 #include <map>
 #include <openvino/openvino.hpp>
 #include <samples/slog.hpp>
+#include "inputs_full_cfg.hpp"
+
 #include <string>
 #include <vector>
 
@@ -33,37 +35,34 @@ inline std::string double_to_string(const double number) {
     return ss.str();
 };
 
-namespace benchmark_app {
-struct InputInfo {
-    ov::element::Type type;
-    ov::PartialShape partialShape;
-    ov::Shape dataShape;
-    ov::Layout layout;
-    std::vector<float> scale;
-    std::vector<float> mean;
-    bool is_image() const;
-    bool is_image_info() const;
-    size_t width() const;
-    size_t height() const;
-    size_t channels() const;
-    size_t batch() const;
-    size_t depth() const;
-    std::vector<std::string> fileNames;
-};
-using InputsInfo = std::map<std::string, InputInfo>;
+//struct InputInfo {
+//    ov::element::Type type;
+//    ov::PartialShape partialShape;
+//    ov::Shape dataShape;
+//    ov::Layout layout;
+//    std::vector<float> scale;
+//    std::vector<float> mean;
+//    bool is_image() const;
+//    bool is_image_info() const;
+//    size_t width() const;
+//    size_t height() const;
+//    size_t channels() const;
+//    size_t batch() const;
+//    size_t depth() const;
+//    std::vector<std::string> fileNames;
+//};
+
 using PartialShapes = std::map<std::string, ngraph::PartialShape>;
-}  // namespace benchmark_app
 
 std::vector<std::string> parse_devices(const std::string& device_string);
 uint32_t device_default_device_duration_in_seconds(const std::string& device);
 std::map<std::string, std::string> parse_value_per_device(const std::vector<std::string>& devices,
                                                           const std::string& values_string);
 std::string get_shape_string(const ov::Shape& shape);
-std::string get_shapes_string(const benchmark_app::PartialShapes& shapes);
-size_t get_batch_size(const benchmark_app::InputsInfo& inputs_info);
+std::string get_shapes_string(const PartialShapes& shapes);
 std::vector<std::string> split(const std::string& s, char delim);
 std::map<std::string, std::vector<float>> parse_scale_or_mean(const std::string& scale_mean,
-                                                              const benchmark_app::InputsInfo& inputs_info);
+                                                              const InputsInfo& inputs_info);
 std::vector<ngraph::Dimension> parse_partial_shape(const std::string& partial_shape);
 ov::Shape parse_data_shape(const std::string& dataShapeStr);
 std::pair<std::string, std::vector<std::string>> parse_input_files(const std::string& file_paths_string);
@@ -83,15 +82,15 @@ std::map<std::string, std::vector<std::string>> parse_input_parameters(const std
 /// <param name="mean_string">command-line imean string</param>
 /// <param name="input_info">inputs vector obtained from ov::Model</param>
 /// <param name="reshape_required">returns true to this parameter if reshape is required</param>
-/// <returns>vector of benchmark_app::InputsInfo elements.
+/// <returns>vector of InputCfgInputsInfo elements.
 /// Each element is a configuration item for every test configuration case
 /// (number of cases is calculated basing on data_shape and other parameters).
 /// Each element is a map (input_name, configuration) containing data for each input</returns>
-std::vector<benchmark_app::InputsInfo> get_inputs_info(const std::string& shape_string,
+std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
                                                        const std::string& layout_string,
                                                        const size_t batch_size,
                                                        const std::string& data_shapes_string,
-                                                       const std::map<std::string, std::vector<std::string>>& fileNames,
+                                                       const std::map<std::string, std::vector<std::string>>& -fileNames,
                                                        const std::string& scale_string,
                                                        const std::string& mean_string,
                                                        const std::vector<ov::Output<const ov::Node>>& input_info,
@@ -108,18 +107,17 @@ std::vector<benchmark_app::InputsInfo> get_inputs_info(const std::string& shape_
 /// <param name="mean_string">command-line imean string</param>
 /// <param name="input_info">inputs vector obtained from ov::Model</param>
 /// <param name="reshape_required">returns true to this parameter if reshape is required</param>
-/// <returns>vector of benchmark_app::InputsInfo elements.
+/// <returns>vector of InputCfgInputsInfo elements.
 /// Each element is a configuration item for every test configuration case
 /// (number of cases is calculated basing on data_shape and other parameters).
 /// Each element is a map (input_name, configuration) containing data for each
 /// input</returns>
-std::vector<benchmark_app::InputsInfo> get_inputs_info(const std::string& shape_string,
+std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
                                                        const std::string& layout_string,
                                                        const size_t batch_size,
                                                        const std::string& data_shapes_string,
                                                        const std::map<std::string, std::vector<std::string>>& fileNames,
-                                                       const std::string& scale_string,
-                                                       const std::string& mean_string,
+                                                       const std::string& scale_string,                                                       const std::string& mean_string,
                                                        const std::vector<ov::Output<const ov::Node>>& input_info);
 
 void dump_config(const std::string& filename, const std::map<std::string, ov::AnyMap>& config);

@@ -24,35 +24,6 @@
 #    include <opencv2/core.hpp>
 #endif
 
-namespace benchmark_app {
-bool InputInfo::is_image() const {
-    if ((layout != "NCHW") && (layout != "NHWC") && (layout != "CHW") && (layout != "HWC"))
-        return false;
-    // If data_shape is still empty, assume this is still an Image and tensor shape will be filled later
-    return (dataShape.empty() || channels() == 3);
-}
-bool InputInfo::is_image_info() const {
-    if (layout != "NC")
-        return false;
-    return (channels() >= 2);
-}
-size_t InputInfo::width() const {
-    return dataShape.at(ov::layout::width_idx(layout));
-}
-size_t InputInfo::height() const {
-    return dataShape.at(ov::layout::height_idx(layout));
-}
-size_t InputInfo::channels() const {
-    return dataShape.at(ov::layout::channels_idx(layout));
-}
-size_t InputInfo::batch() const {
-    return dataShape.at(ov::layout::batch_idx(layout));
-}
-size_t InputInfo::depth() const {
-    return dataShape.at(ov::layout::depth_idx(layout));
-}
-}  // namespace benchmark_app
-
 uint32_t device_default_device_duration_in_seconds(const std::string& device) {
     static const std::map<std::string, uint32_t> deviceDefaultDurationInSeconds{{"CPU", 60},
                                                                                 {"GPU", 60},
@@ -153,33 +124,13 @@ std::map<std::string, std::string> parse_value_per_device(const std::vector<std:
     return result;
 }
 
-size_t get_batch_size(const benchmark_app::InputsInfo& inputs_info) {
-    size_t batch_size = 0;
-    for (auto& info : inputs_info) {
-        if (ov::layout::has_batch(info.second.layout)) {
-            if (batch_size == 0)
-                batch_size = info.second.batch();
-            else if (batch_size != info.second.batch())
-                throw std::logic_error("Can't deterimine batch size: batch is "
-                                       "different for different inputs!");
-        }
-    }
-    if (batch_size == 0) {
-        slog::warn << "No batch dimension was found at any input, asssuming batch to be 1. Beware: this might affect "
-                      "FPS calculation."
-                   << slog::endl;
-        batch_size = 1;
-    }
-    return batch_size;
-}
-
 std::string get_shape_string(const ov::Shape& shape) {
     std::stringstream ss;
     ss << shape;
     return ss.str();
 }
 
-std::string get_shapes_string(const benchmark_app::PartialShapes& shapes) {
+std::string get_shapes_string(const InputCfgPartialShapes& shapes) {
     std::stringstream ss;
     for (auto& shape : shapes) {
         if (!ss.str().empty())
@@ -190,7 +141,7 @@ std::string get_shapes_string(const benchmark_app::PartialShapes& shapes) {
 }
 
 std::map<std::string, std::vector<float>> parse_scale_or_mean(const std::string& scale_mean,
-                                                              const benchmark_app::InputsInfo& inputs_info) {
+                                                              const InputCfgInputsInfo& inputs_info) {
     //  Format: data:[255,255,255],info[255,255,255]
     std::map<std::string, std::vector<float>> return_value;
 
@@ -381,7 +332,7 @@ std::map<std::string, std::vector<std::string>> parse_input_parameters(
     return return_value;
 }
 
-std::vector<benchmark_app::InputsInfo> get_inputs_info(const std::string& shape_string,
+std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
                                                        const std::string& layout_string,
                                                        const size_t batch_size,
                                                        const std::string& data_shapes_string,
@@ -447,13 +398,13 @@ std::vector<benchmark_app::InputsInfo> get_inputs_info(const std::string& shape_
         currentFileCounters[item.get_any_name()] = 0;
     }
 
-    std::vector<benchmark_app::InputsInfo> info_maps;
+    std::vector<InputCfgInputsInfo> info_maps;
     for (size_t i = 0; i < min_size; ++i) {
-        benchmark_app::InputsInfo info_map;
+        InputCfgInputsInfo info_map;
 
         bool is_there_at_least_one_batch_dim = false;
         for (auto& item : input_info) {
-            benchmark_app::InputInfo info;
+            InputCfgInputCfg info;
             auto name = item.get_any_name();
 
             // Layout
@@ -647,7 +598,7 @@ std::vector<benchmark_app::InputsInfo> get_inputs_info(const std::string& shape_
     return info_maps;
 }
 
-std::vector<benchmark_app::InputsInfo> get_inputs_info(const std::string& shape_string,
+std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
                                                        const std::string& layout_string,
                                                        const size_t batch_size,
                                                        const std::string& tensors_shape_string,

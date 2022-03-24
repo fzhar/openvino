@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2022 Intel Corporation
+﻿// Copyright (C) 2018-2022 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -27,7 +27,7 @@ template <typename T>
 ov::Tensor create_tensor_from_image(const std::vector<std::string>& files,
                                     size_t inputId,
                                     size_t batchSize,
-                                    const benchmark_app::InputInfo& inputInfo,
+                                    const InputCfg& inputInfo,
                                     const std::string& inputName,
                                     std::string* filenames_used = nullptr) {
     size_t tensor_size =
@@ -99,7 +99,7 @@ ov::Tensor create_tensor_from_image(const std::vector<std::string>& files,
 template <typename T>
 ov::Tensor create_tensor_im_info(const std::pair<size_t, size_t>& image_size,
                                  size_t batchSize,
-                                 const benchmark_app::InputInfo& inputInfo,
+                                 const InputCfgInputCfg& inputInfo,
                                  const std::string& inputName) {
     size_t tensor_size =
         std::accumulate(inputInfo.dataShape.begin(), inputInfo.dataShape.end(), 1, std::multiplies<size_t>());
@@ -135,7 +135,7 @@ template <typename T>
 ov::Tensor create_tensor_from_binary(const std::vector<std::string>& files,
                                      size_t inputId,
                                      size_t batchSize,
-                                     const benchmark_app::InputInfo& inputInfo,
+                                     const InputCfgInputCfg& inputInfo,
                                      const std::string& inputName,
                                      std::string* filenames_used = nullptr) {
     size_t tensor_size =
@@ -190,7 +190,7 @@ ov::Tensor create_tensor_from_binary(const std::vector<std::string>& files,
 }
 
 template <typename T, typename T2>
-ov::Tensor create_tensor_random(const benchmark_app::InputInfo& inputInfo,
+ov::Tensor create_tensor_random(const InputCfgInputCfg& inputInfo,
                                 T rand_min = std::numeric_limits<uint8_t>::min(),
                                 T rand_max = std::numeric_limits<uint8_t>::max()) {
     size_t tensor_size =
@@ -211,7 +211,7 @@ ov::Tensor create_tensor_random(const benchmark_app::InputInfo& inputInfo,
 ov::Tensor get_image_tensor(const std::vector<std::string>& files,
                             size_t inputId,
                             size_t batchSize,
-                            const std::pair<std::string, benchmark_app::InputInfo>& inputInfo,
+                            const std::pair<std::string, InputCfgInputCfg>& inputInfo,
                             std::string* filenames_used = nullptr) {
     auto type = inputInfo.second.type;
     if (type == ov::element::f32) {
@@ -256,7 +256,7 @@ ov::Tensor get_image_tensor(const std::vector<std::string>& files,
 
 ov::Tensor get_im_info_tensor(const std::pair<size_t, size_t>& image_size,
                               size_t batchSize,
-                              const std::pair<std::string, benchmark_app::InputInfo>& inputInfo) {
+                              const std::pair<std::string, InputCfgInputCfg>& inputInfo) {
     auto type = inputInfo.second.type;
     if (type == ov::element::f32) {
         return create_tensor_im_info<float>(image_size, batchSize, inputInfo.second, inputInfo.first);
@@ -274,7 +274,7 @@ ov::Tensor get_im_info_tensor(const std::pair<size_t, size_t>& image_size,
 ov::Tensor get_binary_tensor(const std::vector<std::string>& files,
                              size_t inputId,
                              size_t batchSize,
-                             const std::pair<std::string, benchmark_app::InputInfo>& inputInfo,
+                             const std::pair<std::string, InputCfgInputCfg>& inputInfo,
                              std::string* filenames_used = nullptr) {
     const auto& type = inputInfo.second.type;
     if (type == ov::element::f32) {
@@ -317,7 +317,7 @@ ov::Tensor get_binary_tensor(const std::vector<std::string>& files,
     }
 }
 
-ov::Tensor get_random_tensor(const std::pair<std::string, benchmark_app::InputInfo>& inputInfo) {
+ov::Tensor get_random_tensor(const std::pair<std::string, InputCfgInputCfg>& inputInfo) {
     auto type = inputInfo.second.type;
     if (type == ov::element::f32) {
         return create_tensor_random<float, float>(inputInfo.second);
@@ -346,12 +346,13 @@ ov::Tensor get_random_tensor(const std::pair<std::string, benchmark_app::InputIn
     }
 }
 
-std::string get_test_info_stream_header(benchmark_app::InputInfo& inputInfo) {
+std::string get_test_info_stream_header(TestCfg& test_cfg) {
     std::stringstream strOut;
-    strOut << "(" << inputInfo.layout.to_string() << ", " << inputInfo.type.get_type_name() << ", "
-           << get_shape_string(inputInfo.dataShape) << ", ";
-    if (inputInfo.partialShape.is_dynamic()) {
-        strOut << std::string("dyn:") << inputInfo.partialShape << "):\t";
+    strOut << "(" << test_cfg.input_cfg.layout.to_string() << ", " << test_cfg.input_cfg.type.get_type_name()
+           << ", "
+           << get_shape_string(test_cfg.data_shape) << ", ";
+    if (test_cfg.input_cfg.partial_shape.is_dynamic()) {
+        strOut << std::string("dyn:") << test_cfg.input_cfg.partial_shape << "):\t";
     } else {
         strOut << "static):\t";
     }
@@ -359,39 +360,39 @@ std::string get_test_info_stream_header(benchmark_app::InputInfo& inputInfo) {
 }
 
 std::map<std::string, ov::TensorVector> get_tensors(std::map<std::string, std::vector<std::string>> inputFiles,
-                                                    std::vector<benchmark_app::InputsInfo>& app_inputs_info) {
+                                                    InputsFullCfg& inputs_cfg) {
     std::ios::fmtflags fmt(std::cout.flags());
     std::map<std::string, ov::TensorVector> tensors;
-    if (app_inputs_info.empty()) {
+    if (inputs_cfg.empty()) {
         throw std::logic_error("Inputs Info for network is empty!");
     }
 
-    if (!inputFiles.empty() && inputFiles.size() != app_inputs_info[0].size()) {
+    if (!inputFiles.empty() && inputFiles.size() != inputs_cfg.size()) {
         throw std::logic_error("Number of inputs specified in -i must be equal to number of network inputs!");
     }
 
     // count image type inputs of network
     std::vector<std::pair<size_t, size_t>> net_input_im_sizes;
-    for (auto& inputs_info : app_inputs_info) {
-        for (auto& input : inputs_info) {
-            if (input.second.is_image()) {
-                net_input_im_sizes.push_back(std::make_pair(input.second.width(), input.second.height()));
+    for (const auto& input_cfg : inputs_cfg) {
+        for (const auto& test_сfg : input_cfg.second.tests) {
+            if (test_сfg.type == TestCfg::IMAGE) {
+                net_input_im_sizes.push_back(std::make_pair(test_cfg.width(), test_cfg.height()));
             }
         }
     }
 
     for (auto& files : inputFiles) {
-        if (!files.first.empty() && app_inputs_info[0].find(files.first) == app_inputs_info[0].end()) {
+        if (!files.first.empty() && inputs_cfg.find(files.first) == inputs_cfg.end()) {
             throw std::logic_error("Input name \"" + files.first +
                                    "\" used in -i parameter doesn't match any network's input");
         }
 
-        std::string input_name = files.first.empty() ? app_inputs_info[0].begin()->first : files.first;
-        auto input = app_inputs_info[0].at(input_name);
+        std::string input_name = files.first.empty() ? inputs_cfg.begin()->first : files.first;
+        auto input = inputs_cfg.at(input_name);
         if (!files.second.empty() && files.second[0] != "random" && files.second[0] != "image_info") {
-            if (input.is_image()) {
+            if (input.tests[0].looks_like_image()) { //TODO: check all items, during command line parsing
                 files.second = filter_files_by_extensions(files.second, supported_image_extensions);
-            } else if (input.is_image_info() && net_input_im_sizes.size() == app_inputs_info.size()) {
+            } else if (input.tests[0].looks_like_image_info() && net_input_im_sizes.size() == inputs_cfg.get_tests_count()) { //TODO: check all items, during command line parsing
                 slog::info << "Input '" << input_name
                            << "' probably is image info. All files for this input will"
                               " be ignored."
@@ -411,8 +412,8 @@ std::map<std::string, ov::TensorVector> get_tensors(std::map<std::string, std::v
 
         size_t filesToBeUsed = 0;
         size_t shapesToBeUsed = 0;
-        if (files.second.size() > app_inputs_info.size()) {
-            shapesToBeUsed = app_inputs_info.size();
+        if (files.second.size() > inputs_cfg.get_tests_count()) {
+            shapesToBeUsed = inputs_cfg.get_tests_count();
             filesToBeUsed = files.second.size() - files.second.size() % app_inputs_info.size();
             if (filesToBeUsed != files.second.size()) {
                 slog::warn << "Number of files must be a multiple of the number of shapes for certain input. Only " +
@@ -423,17 +424,19 @@ std::map<std::string, ov::TensorVector> get_tensors(std::map<std::string, std::v
                 files.second.pop_back();
             }
         } else {
-            shapesToBeUsed = app_inputs_info.size() - app_inputs_info.size() % files.second.size();
-            filesToBeUsed = files.second.size();
-            if (shapesToBeUsed != app_inputs_info.size()) {
-                slog::warn << "Number of data shapes must be a multiple of the number of files. For input "
-                           << files.first << " only " + std::to_string(shapesToBeUsed) + " files will be added."
-                           << slog::endl;
-            }
-            while (app_inputs_info.size() != shapesToBeUsed) {
-                app_inputs_info.pop_back();
-                net_input_im_sizes.pop_back();
-            }
+            //TODO: Refactor later during command line parsing
+
+            //shapesToBeUsed = inputs_cfg.get_tests_count() - inputs_cfg.get_tests_count() % files.second.size();
+            //filesToBeUsed = files.second.size();
+            //if (shapesToBeUsed != inputs_cfg.get_tests_count()) {
+            //    slog::warn << "Number of data shapes must be a multiple of the number of files. For input "
+            //               << files.first << " only " + std::to_string(shapesToBeUsed) + " files will be added."
+            //               << slog::endl;
+            //}
+            //while (inputs_cfg.get_tests_count() != shapesToBeUsed) {
+            //    app_inputs_info.pop_back();
+            //    net_input_im_sizes.pop_back();
+            //}
         }
     }
 
@@ -451,48 +454,45 @@ std::map<std::string, ov::TensorVector> get_tensors(std::map<std::string, std::v
                        ->second.size();
     } else {
         std::vector<std::pair<size_t, size_t>> net_input_im_sizes;
-        for (auto& input_info : app_inputs_info[0]) {
+        for (auto& input_info : inputs_cfg) {
             inputFiles[input_info.first] = {"random"};
         }
     }
 
-    std::vector<size_t> batchSizes;
-    for (const auto& info : app_inputs_info) {
-        batchSizes.push_back(get_batch_size(info));
-    }
+    const auto& batchSizes = inputs_cfg.get_batch_sizes();
 
     for (const auto& files : inputFiles) {
-        std::string input_name = files.first.empty() ? app_inputs_info[0].begin()->first : files.first;
+        std::string input_name = files.first.empty() ? inputs_cfg.begin()->first : files.first;
         size_t n_shape = 0, m_file = 0;
-        while (n_shape < app_inputs_info.size() || m_file < filesNum) {
-            size_t batchSize = batchSizes[n_shape % app_inputs_info.size()];
+        while (n_shape < inputs_cfg.get_tests_count() || m_file < filesNum) {
+            size_t batchSize = batchSizes[n_shape % inputs_cfg.get_tests_count()];
             size_t inputId = m_file % files.second.size();
-            auto input_info = app_inputs_info[n_shape % app_inputs_info.size()].at(input_name);
+            auto test_info = inputs_cfg[input_name].tests[n_shape % inputs_cfg.get_tests_count()];
 
             std::string tensor_src_info;
             if (files.second[0] == "random") {
                 // Fill random
                 tensor_src_info =
-                    "random (" + std::string((input_info.is_image() ? "image" : "binary data")) + " is expected)";
-                tensors[input_name].push_back(get_random_tensor({input_name, input_info}));
+                    "random (" + std::string((test_info.looks_like_image() ? "image" : "binary data")) + " is expected)";
+                tensors[input_name].push_back(get_random_tensor({input_name, test_info}));
             } else if (files.second[0] == "image_info") {
                 // Most likely it is image info: fill with image information
-                auto image_size = net_input_im_sizes.at(n_shape % app_inputs_info.size());
+                auto image_size = net_input_im_sizes.at(n_shape % inputs_cfg.get_tests_count());
                 tensor_src_info =
                     "Image size tensor " + std::to_string(image_size.first) + " x " + std::to_string(image_size.second);
-                tensors[input_name].push_back(get_im_info_tensor(image_size, batchSize, {input_name, input_info}));
-            } else if (input_info.is_image()) {
+                tensors[input_name].push_back(get_im_info_tensor(image_size, batchSize, {input_name, test_info}));
+            } else if (test_info.type == TestCfg::IMAGE) {
                 // Fill with Images
                 tensors[input_name].push_back(
-                    get_image_tensor(files.second, inputId, batchSize, {input_name, input_info}, &tensor_src_info));
+                    get_image_tensor(files.second, inputId, batchSize, {input_name, test_info}, &tensor_src_info));
             } else {
                 // Fill with binary files
                 tensors[input_name].push_back(
-                    get_binary_tensor(files.second, inputId, batchSize, {input_name, input_info}, &tensor_src_info));
+                    get_binary_tensor(files.second, inputId, batchSize, {input_name, test_info}, &tensor_src_info));
             }
 
             // Preparing info
-            std::string strOut = get_test_info_stream_header(input_info) + tensor_src_info;
+            std::string strOut = get_test_info_stream_header(test_info) + tensor_src_info;
             if (n_shape >= logOutput.size()) {
                 logOutput.resize(n_shape + 1);
             }
@@ -523,7 +523,7 @@ std::map<std::string, ov::TensorVector> get_tensors(std::map<std::string, std::v
 
 std::map<std::string, ov::TensorVector> get_tensors_static_case(const std::vector<std::string>& inputFiles,
                                                                 const size_t& batchSize,
-                                                                benchmark_app::InputsInfo& app_inputs_info,
+                                                                InputCfgInputsInfo& app_inputs_info,
                                                                 size_t requestsNum) {
     std::ios::fmtflags fmt(std::cout.flags());
     std::map<std::string, ov::TensorVector> blobs;
