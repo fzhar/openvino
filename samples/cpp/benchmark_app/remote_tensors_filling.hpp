@@ -59,7 +59,7 @@ using BufferType = void*;
 
 std::map<std::string, ov::TensorVector> get_remote_input_tensors(
     const std::map<std::string, std::vector<std::string>>& inputFiles,
-    const std::vector<InputCfgInputsInfo>& app_inputs_info,
+    const InputsFullCfg& app_inputs_info,
     const ov::CompiledModel& compiledModel,
     std::vector<BufferType>& clBuffer,
     size_t num_requests);

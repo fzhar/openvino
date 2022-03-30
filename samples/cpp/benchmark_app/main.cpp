@@ -421,7 +421,7 @@ int main(int argc, char* argv[]) {
         size_t batchSize = FLAGS_b;
         ov::element::Type type = ov::element::undefined;
         std::string topology_name = "";
-        std::vector<InputCfgInputsInfo> app_inputs_info;
+        std::vector<InputCfg> app_inputs_info;
         std::string output_name;
 
         // Takes priority over config from file
@@ -596,7 +596,7 @@ int main(int argc, char* argv[]) {
             auto input_info = app_inputs_info[0];
             isDynamicNetwork = std::any_of(input_info.begin(),
                                            input_info.end(),
-                                           [](const std::pair<std::string, InputCfgInputCfg>& i) {
+                                           [](const std::pair<std::string, InputCfg>& i) {
                                                return i.second.partialShape.is_dynamic();
                                            });
 
@@ -984,7 +984,7 @@ int main(int argc, char* argv[]) {
                     batchSize = get_batch_size(inputs);
                     if (!std::any_of(inputs.begin(),
                                      inputs.end(),
-                                     [](const std::pair<const std::string, InputCfgInputCfg>& info) {
+                                     [](const std::pair<const std::string, InputCfg>& info) {
                                          return ov::layout::has_batch(info.second.layout);
                                      })) {
                         slog::warn
@@ -1052,7 +1052,7 @@ int main(int argc, char* argv[]) {
 
                 std::string data_shapes_string = "";
                 for (auto& item : app_inputs_info[i]) {
-                    data_shapes_string += item.first + get_shape_string(item.second.dataShape) + ",";
+                    data_shapes_string += item.first + get_shape_string(item.second.data_shape) + ",";
                 }
                 data_shapes_string =
                     data_shapes_string == "" ? "" : data_shapes_string.substr(0, data_shapes_string.size() - 1);
@@ -1146,10 +1146,10 @@ int main(int argc, char* argv[]) {
                     slog::info << (i + 1) << ".";
                     for (auto& item : app_inputs_info[i]) {
                         std::stringstream input_shape;
-                        auto shape = item.second.dataShape;
+                        auto shape = item.second.data_shape;
                         std::copy(shape.begin(), shape.end() - 1, std::ostream_iterator<size_t>(input_shape, ","));
                         input_shape << shape.back();
-                        slog::info << " " << item.first << " : " << get_shape_string(item.second.dataShape);
+                        slog::info << " " << item.first << " : " << get_shape_string(item.second.data_shape);
                     }
                     slog::info << slog::endl;
 

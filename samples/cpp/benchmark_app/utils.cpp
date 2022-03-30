@@ -130,7 +130,7 @@ std::string get_shape_string(const ov::Shape& shape) {
     return ss.str();
 }
 
-std::string get_shapes_string(const InputCfgPartialShapes& shapes) {
+std::string get_shapes_string(const PartialShapes& shapes) {
     std::stringstream ss;
     for (auto& shape : shapes) {
         if (!ss.str().empty())
@@ -141,7 +141,7 @@ std::string get_shapes_string(const InputCfgPartialShapes& shapes) {
 }
 
 std::map<std::string, std::vector<float>> parse_scale_or_mean(const std::string& scale_mean,
-                                                              const InputCfgInputsInfo& inputs_info) {
+                                                              const InputsFullCfg& inputs_info) {
     //  Format: data:[255,255,255],info[255,255,255]
     std::map<std::string, std::vector<float>> return_value;
 
@@ -332,7 +332,7 @@ std::map<std::string, std::vector<std::string>> parse_input_parameters(
     return return_value;
 }
 
-std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
+std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
                                                        const std::string& layout_string,
                                                        const size_t batch_size,
                                                        const std::string& data_shapes_string,
@@ -398,13 +398,13 @@ std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
         currentFileCounters[item.get_any_name()] = 0;
     }
 
-    std::vector<InputCfgInputsInfo> info_maps;
+    std::vector<InputCfg> info_maps;
     for (size_t i = 0; i < min_size; ++i) {
-        InputCfgInputsInfo info_map;
+        InputCfg info_map;
 
         bool is_there_at_least_one_batch_dim = false;
         for (auto& item : input_info) {
-            InputCfgInputCfg info;
+            InputCfg info;
             auto name = item.get_any_name();
 
             // Layout
@@ -470,7 +470,7 @@ std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
 
             // Tensor Shape
             if (info.partialShape.is_dynamic() && data_shapes_map.count(name)) {
-                info.dataShape = parse_data_shape(data_shapes_map.at(name)[i % data_shapes_map.at(name).size()]);
+                info.data_shape = parse_data_shape(data_shapes_map.at(name)[i % data_shapes_map.at(name).size()]);
             } else if (info.partialShape.is_dynamic() && fileNames.count(filesInputName) && info.is_image()) {
                 auto& namesVector = fileNames.at(filesInputName);
                 if (contains_binaries(namesVector)) {
@@ -479,11 +479,11 @@ std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
                                            "be defined explicitly (using -data_shape).");
                 }
 
-                info.dataShape = ov::Shape(info.partialShape.size(), 0);
+                info.data_shape = ov::Shape(info.partialShape.size(), 0);
                 for (int i = 0; i < info.partialShape.size(); i++) {
                     auto& dim = info.partialShape[i];
                     if (dim.is_static()) {
-                        info.dataShape[i] = dim.get_length();
+                        info.data_shape[i] = dim.get_length();
                     }
                 }
 
@@ -492,7 +492,7 @@ std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
                     if (info.batch()) {
                         tensorBatchSize = std::max(tensorBatchSize, info.batch());
                     } else {
-                        info.dataShape[ov::layout::batch_idx(info.layout)] = tensorBatchSize;
+                        info.data_shape[ov::layout::batch_idx(info.layout)] = tensorBatchSize;
                     }
                 }
 
@@ -516,14 +516,14 @@ std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
                 }
                 currentFileCounters[item.get_any_name()] = fileIdx;
 
-                if (!info.dataShape[ov::layout::height_idx(info.layout)]) {
-                    info.dataShape[ov::layout::height_idx(info.layout)] = h;
+                if (!info.data_shape[ov::layout::height_idx(info.layout)]) {
+                    info.data_shape[ov::layout::height_idx(info.layout)] = h;
                 }
-                if (!info.dataShape[ov::layout::width_idx(info.layout)]) {
-                    info.dataShape[ov::layout::width_idx(info.layout)] = w;
+                if (!info.data_shape[ov::layout::width_idx(info.layout)]) {
+                    info.data_shape[ov::layout::width_idx(info.layout)] = w;
                 }
 
-                if (std::any_of(info.dataShape.begin(), info.dataShape.end(), [](size_t d) {
+                if (std::any_of(info.data_shape.begin(), info.data_shape.end(), [](size_t d) {
                         return d == 0;
                     })) {
                     throw std::logic_error("Not enough information in shape and image to determine tensor shape "
@@ -532,7 +532,7 @@ std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
                 }
 
             } else if (info.partialShape.is_static()) {
-                info.dataShape = info.partialShape.get_shape();
+                info.data_shape = info.partialShape.get_shape();
                 if (data_shapes_map.find(name) != data_shapes_map.end()) {
                     throw std::logic_error(
                         "Network's input \"" + name +
@@ -551,11 +551,11 @@ std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
             if (batch_size != 0) {
                 if (ov::layout::has_batch(info.layout)) {
                     std::size_t batch_index = ov::layout::batch_idx(info.layout);
-                    if (info.dataShape.at(batch_index) != batch_size) {
+                    if (info.data_shape.at(batch_index) != batch_size) {
                         if (info.partialShape.is_static()) {
                             info.partialShape[batch_index] = batch_size;
                         }
-                        info.dataShape[batch_index] = batch_size;
+                        info.data_shape[batch_index] = batch_size;
                         reshape_required = true;
                         is_there_at_least_one_batch_dim = true;
                     }
@@ -598,7 +598,7 @@ std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
     return info_maps;
 }
 
-std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
+std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
                                                        const std::string& layout_string,
                                                        const size_t batch_size,
                                                        const std::string& tensors_shape_string,

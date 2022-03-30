@@ -62,7 +62,7 @@ std::string get_shape_string(const ov::Shape& shape);
 std::string get_shapes_string(const PartialShapes& shapes);
 std::vector<std::string> split(const std::string& s, char delim);
 std::map<std::string, std::vector<float>> parse_scale_or_mean(const std::string& scale_mean,
-                                                              const InputsInfo& inputs_info);
+                                                              const InputsFullCfg& inputs_info);
 std::vector<ngraph::Dimension> parse_partial_shape(const std::string& partial_shape);
 ov::Shape parse_data_shape(const std::string& dataShapeStr);
 std::pair<std::string, std::vector<std::string>> parse_input_files(const std::string& file_paths_string);
@@ -82,15 +82,15 @@ std::map<std::string, std::vector<std::string>> parse_input_parameters(const std
 /// <param name="mean_string">command-line imean string</param>
 /// <param name="input_info">inputs vector obtained from ov::Model</param>
 /// <param name="reshape_required">returns true to this parameter if reshape is required</param>
-/// <returns>vector of InputCfgInputsInfo elements.
+/// <returns>vector of InputCfg elements.
 /// Each element is a configuration item for every test configuration case
 /// (number of cases is calculated basing on data_shape and other parameters).
 /// Each element is a map (input_name, configuration) containing data for each input</returns>
-std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
+std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
                                                        const std::string& layout_string,
                                                        const size_t batch_size,
                                                        const std::string& data_shapes_string,
-                                                       const std::map<std::string, std::vector<std::string>>& -fileNames,
+                                                       const std::map<std::string, std::vector<std::string>>& fileNames,
                                                        const std::string& scale_string,
                                                        const std::string& mean_string,
                                                        const std::vector<ov::Output<const ov::Node>>& input_info,
@@ -107,12 +107,12 @@ std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
 /// <param name="mean_string">command-line imean string</param>
 /// <param name="input_info">inputs vector obtained from ov::Model</param>
 /// <param name="reshape_required">returns true to this parameter if reshape is required</param>
-/// <returns>vector of InputCfgInputsInfo elements.
+/// <returns>vector of InputCfg elements.
 /// Each element is a configuration item for every test configuration case
 /// (number of cases is calculated basing on data_shape and other parameters).
 /// Each element is a map (input_name, configuration) containing data for each
 /// input</returns>
-std::vector<InputCfgInputsInfo> get_inputs_info(const std::string& shape_string,
+std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
                                                        const std::string& layout_string,
                                                        const size_t batch_size,
                                                        const std::string& data_shapes_string,

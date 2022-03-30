@@ -67,7 +67,7 @@ void fill_buffer(void* inputBuffer, size_t elementsNum, const ov::element::Type&
 
 std::map<std::string, ov::TensorVector> get_remote_input_tensors(
     const std::map<std::string, std::vector<std::string>>& inputFiles,
-    const std::vector<InputCfgInputsInfo>& app_inputs_info,
+    const InputsFullCfg& app_inputs_info,
     const ov::CompiledModel& compiledModel,
     std::vector<BufferType>& clBuffer,
     size_t num_requests) {
@@ -84,17 +84,16 @@ std::map<std::string, ov::TensorVector> get_remote_input_tensors(
     auto oclInstance = std::make_shared<gpu::OpenCL>(oclContext.get());
 
     for (int i = 0; i < num_requests; i++) {
-        for (auto& inputs_info : app_inputs_info) {
-            for (auto& input : inputs_info) {
+        for (auto& input : app_inputs_info) {
+            for (auto& test : input.second.tests) {
                 // Fill random
                 slog::info << "Prepare remote blob for input '" << input.first << "' with random values ("
-                           << std::string((input.second.is_image() ? "image" : "some binary data")) << " is expected)"
+                           << std::string((test.looks_like_image() ? "image" : "some binary data")) << " is expected)"
                            << slog::endl;
 
                 // Creating and filling shared buffers
                 cl_int err;
-                auto elementsNum = std::accumulate(begin(input.second.dataShape),
-                                                   end(input.second.dataShape),
+                auto elementsNum = std::accumulate(begin(test.data_shape), end(test.data_shape),
                                                    1,
                                                    std::multiplies<size_t>());
                 auto inputSize = elementsNum * input.second.type.bitwidth() / 8;
@@ -109,7 +108,7 @@ std::map<std::string, ov::TensorVector> get_remote_input_tensors(
                                                                        (cl::size_type)inputSize);
 
                 auto tensor =
-                    oclContext.create_tensor(input.second.type, input.second.dataShape, clBuffer.back().get());
+                    oclContext.create_tensor(input.second.type, test.data_shape, clBuffer.back().get());
                 remoteTensors[input.first].push_back(tensor);
 
                 if (inputFiles.empty()) {
