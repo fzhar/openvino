@@ -28,6 +28,7 @@
 #include "remote_tensors_filling.hpp"
 #include "statistics_report.hpp"
 #include "utils.hpp"
+#include "inputs_full_cfg.hpp"
 // clang-format on
 
 static const size_t progressBarDefaultTotalCount = 1000;
@@ -418,10 +419,10 @@ int main(int argc, char* argv[]) {
             core.set_property(item.first, item.second);
         }
 
-        size_t batchSize = FLAGS_b;
+        size_t preset_batch_size = FLAGS_b;
         ov::element::Type type = ov::element::undefined;
         std::string topology_name = "";
-        std::vector<InputCfg> app_inputs_info;
+        InputsFullCfg app_inputs_info;
         std::string output_name;
 
         // Takes priority over config from file
@@ -453,16 +454,12 @@ int main(int argc, char* argv[]) {
             convert_io_names_in_map(inputFiles, compiledModel.inputs());
             app_inputs_info = get_inputs_info(FLAGS_shape,
                                               FLAGS_layout,
-                                              batchSize,
+                                              preset_batch_size,
                                               FLAGS_data_shape,
                                               inputFiles,
                                               FLAGS_iscale,
                                               FLAGS_imean,
                                               compiledModel.inputs());
-            if (batchSize == 0) {
-                batchSize = 1;
-            }
-
         } else if (!isNetworkCompiled) {
             // ----------------- 4. Reading the Intermediate Representation network
             // ----------------------------------------
@@ -503,9 +500,9 @@ int main(int argc, char* argv[]) {
                                               inputInfo,
                                               reshape);
             if (reshape) {
-                InputCfgPartialShapes shapes = {};
-                for (auto& item : app_inputs_info[0])
-                    shapes[item.first] = item.second.partialShape;
+                PartialShapes shapes = {};
+                for (auto& input_cfg : app_inputs_info)
+                    shapes[input_cfg.first] = input_cfg.second.partial_shape;
                 slog::info << "Reshaping network: " << get_shapes_string(shapes) << slog::endl;
                 startTime = Time::now();
                 model->reshape(shapes);
@@ -551,7 +548,7 @@ int main(int argc, char* argv[]) {
                     type_to_set = iop_precision;
                 } else if (input_precision != ov::element::undefined) {
                     type_to_set = input_precision;
-                } else if (!name.empty() && app_inputs_info[0].at(name).is_image()) {
+                } else if (!name.empty() && app_inputs_info.at(name).looks_like_image()) {
                     // image input, set U8
                     type_to_set = ov::element::u8;
                 }
@@ -561,14 +558,12 @@ int main(int argc, char* argv[]) {
                     in.tensor().set_element_type(type_to_set);
 
                     if (!name.empty()) {
-                        for (auto& info : app_inputs_info) {
-                            info.at(name).type = type_to_set;
-                        }
+                        app_inputs_info.at(name).type = type_to_set;
                     }
                 }
                 // Explicitly set inputs layout.
-                if (!name.empty() && !app_inputs_info[0].at(name).layout.empty()) {
-                    in.model().set_layout(app_inputs_info[0].at(name).layout);
+                if (!name.empty() && !app_inputs_info.at(name).layout.empty()) {
+                    in.model().set_layout(app_inputs_info.at(name).layout);
                 }
             }
 
@@ -593,23 +588,13 @@ int main(int argc, char* argv[]) {
             model = preproc.build();
 
             // Check if network has dynamic shapes
-            auto input_info = app_inputs_info[0];
-            isDynamicNetwork = std::any_of(input_info.begin(),
-                                           input_info.end(),
+            isDynamicNetwork = std::any_of(app_inputs_info.begin(),
+                                           app_inputs_info.end(),
                                            [](const std::pair<std::string, InputCfg>& i) {
-                                               return i.second.partialShape.is_dynamic();
+                                               return i.second.partial_shape.is_dynamic();
                                            });
 
             topology_name = model->get_friendly_name();
-
-            // Calculate batch size according to provided layout and shapes (static case)
-            if (!isDynamicNetwork && app_inputs_info.size()) {
-                batchSize = get_batch_size(app_inputs_info.front());
-
-                slog::info << "Network batch size: " << batchSize << slog::endl;
-            } else if (batchSize == 0) {
-                batchSize = 1;
-            }
 
             printInputAndOutputsInfoShort(*model);
             // ----------------- 7. Loading the model to the device
@@ -661,9 +646,6 @@ int main(int argc, char* argv[]) {
                                               FLAGS_iscale,
                                               FLAGS_imean,
                                               compiledModel.inputs());
-            if (batchSize == 0) {
-                batchSize = 1;
-            }
         }
 
         if (isDynamicNetwork && FLAGS_api == "sync") {
@@ -681,6 +663,18 @@ int main(int argc, char* argv[]) {
             }
             inferenceOnly = isFlagSetInCommandLine("inference_only") && inferenceOnly && app_inputs_info.size() == 1;
         }
+
+        // Calculate batch size according to provided layout and shapes (static case)
+        if (!isDynamicNetwork) {
+            auto batch_sizes = app_inputs_info.get_batch_sizes();
+            preset_batch_size = batch_sizes[0]; 
+
+            // In static case there will be only one shape, so all batches are the same
+            slog::info << "Network batch size (static): " << batch_sizes[0] << slog::endl;
+        } else if (preset_batch_size == 0) {
+            preset_batch_size = 1;
+        }
+
 
         // ----------------- 8. Querying optimal runtime parameters
         // -----------------------------------------------------
@@ -767,7 +761,7 @@ int main(int argc, char* argv[]) {
                      StatisticsVariant("target device", "target_device", device_name),
                      StatisticsVariant("API", "api", FLAGS_api),
                      StatisticsVariant("precision", "precision", type.get_type_name()),
-                     StatisticsVariant("batch size", "batch_size", batchSize),
+                     StatisticsVariant("batch size", "batch_size", preset_batch_size),
                      StatisticsVariant("number of iterations", "iterations_num", niter),
                      StatisticsVariant("number of parallel infer requests", "nireq", nireq),
                      StatisticsVariant("duration (ms)", "duration", get_duration_in_milliseconds(duration_seconds))}));
@@ -815,8 +809,8 @@ int main(int argc, char* argv[]) {
                 } else {
                     inputsData = get_tensors_static_case(
                         inputFiles.empty() ? std::vector<std::string>{} : inputFiles.begin()->second,
-                        batchSize,
-                        app_inputs_info[0],
+                        preset_batch_size,
+                        app_inputs_info,
                         nireq);
                 }
             } else {
@@ -828,8 +822,8 @@ int main(int argc, char* argv[]) {
             } else {
                 inputsData = get_tensors_static_case(
                     inputFiles.empty() ? std::vector<std::string>{} : inputFiles.begin()->second,
-                    batchSize,
-                    app_inputs_info[0],
+                    preset_batch_size,
+                    app_inputs_info,
                     nireq);
             }
         }
@@ -888,9 +882,9 @@ int main(int argc, char* argv[]) {
                 slog::warn << "Only " << nireq << " test configs will be used." << slog::endl;
             size_t i = 0;
             for (auto& inferRequest : inferRequestsQueue.requests) {
-                auto inputs = app_inputs_info[i % app_inputs_info.size()];
-                for (auto& item : inputs) {
-                    auto inputName = item.first;
+                for (auto& input_cfg : app_inputs_info) {
+                    auto test = input_cfg.second.tests[i % app_inputs_info.get_tests_count()];
+                    auto inputName = input_cfg.first;
                     const auto& inputTensor = inputsData.at(inputName)[i % inputsData.at(inputName).size()];
                     // for remote blobs setTensor is used, they are already allocated on the device
                     if (useGpuMem) {
@@ -922,10 +916,8 @@ int main(int argc, char* argv[]) {
         }
 
         if (!inferenceOnly) {
-            auto inputs = app_inputs_info[0];
-
-            for (auto& item : inputs) {
-                auto inputName = item.first;
+            for (auto& input_cfg : app_inputs_info) {
+                auto inputName = input_cfg.first;
                 const auto& data = inputsData.at(inputName)[0];
                 inferRequest->set_tensor(inputName, data);
             }
@@ -974,28 +966,27 @@ int main(int argc, char* argv[]) {
             }
 
             if (!inferenceOnly) {
-                auto inputs = app_inputs_info[iteration % app_inputs_info.size()];
+                auto batch_sizes = app_inputs_info.get_batch_sizes();
 
                 if (FLAGS_pcseq) {
-                    inferRequest->set_latency_group_id(iteration % app_inputs_info.size());
+                    inferRequest->set_latency_group_id(iteration % app_inputs_info.get_tests_count());
                 }
 
-                if (isDynamicNetwork) {
-                    batchSize = get_batch_size(inputs);
-                    if (!std::any_of(inputs.begin(),
-                                     inputs.end(),
-                                     [](const std::pair<const std::string, InputCfg>& info) {
-                                         return ov::layout::has_batch(info.second.layout);
-                                     })) {
-                        slog::warn
-                            << "No batch dimension was found, asssuming batch to be 1. Beware: this might affect "
-                               "FPS calculation."
-                            << slog::endl;
-                    }
-                }
+                //if (isDynamicNetwork) {
+                //    if (!std::any_of(app_inputs_info.begin(),
+                //                     app_inputs_info.end(),
+                //                     [](const std::pair<const std::string, InputCfg>& info) {
+                //                         return info.second.has_batch();
+                //                     })) {
+                //        slog::warn
+                //            << "No batch dimension was found, asssuming batch to be 1. Beware: this might affect "
+                //               "FPS calculation."
+                //            << slog::endl;
+                //    }
+                //}
 
-                for (auto& item : inputs) {
-                    auto inputName = item.first;
+                for (auto& input_cfg : app_inputs_info) {
+                    auto inputName = input_cfg.first;
                     const auto& data = inputsData.at(inputName)[iteration % inputsData.at(inputName).size()];
                     inferRequest->set_tensor(inputName, data);
                 }
@@ -1024,7 +1015,7 @@ int main(int argc, char* argv[]) {
             ++iteration;
 
             execTime = std::chrono::duration_cast<ns>(Time::now() - startTime).count();
-            processedFramesN += batchSize;
+            processedFramesN += preset_batch_size;
 
             if (niter > 0) {
                 progressBar.add_progress(1);
@@ -1045,14 +1036,14 @@ int main(int argc, char* argv[]) {
 
         LatencyMetrics generalLatency(inferRequestsQueue.get_latencies(), "", FLAGS_latency_percentile);
         std::vector<LatencyMetrics> groupLatencies = {};
-        if (FLAGS_pcseq && app_inputs_info.size() > 1) {
+        if (FLAGS_pcseq && app_inputs_info.get_tests_count() > 1) {
             const auto& lat_groups = inferRequestsQueue.get_latency_groups();
             for (int i = 0; i < lat_groups.size(); i++) {
                 const auto& lats = lat_groups[i];
 
                 std::string data_shapes_string = "";
-                for (auto& item : app_inputs_info[i]) {
-                    data_shapes_string += item.first + get_shape_string(item.second.data_shape) + ",";
+                for (auto& item : app_inputs_info) {
+                    data_shapes_string += item.first + get_shape_string(item.second.tests[i].data_shape) + ",";
                 }
                 data_shapes_string =
                     data_shapes_string == "" ? "" : data_shapes_string.substr(0, data_shapes_string.size() - 1);
@@ -1062,7 +1053,7 @@ int main(int argc, char* argv[]) {
         }
 
         double totalDuration = inferRequestsQueue.get_duration_in_milliseconds();
-        double fps = (FLAGS_api == "sync") ? batchSize * 1000.0 / generalLatency.median_or_percentile
+        double fps = (FLAGS_api == "sync") ? preset_batch_size * 1000.0 / generalLatency.median_or_percentile
                                            : 1000.0 * processedFramesN / totalDuration;
 
         if (statistics) {
@@ -1144,12 +1135,12 @@ int main(int argc, char* argv[]) {
                 slog::info << "Latency for each data shape group:" << slog::endl;
                 for (size_t i = 0; i < app_inputs_info.size(); ++i) {
                     slog::info << (i + 1) << ".";
-                    for (auto& item : app_inputs_info[i]) {
+                    for (auto& item : app_inputs_info) {
                         std::stringstream input_shape;
-                        auto shape = item.second.data_shape;
+                        auto shape = item.second.tests[i].data_shape;
                         std::copy(shape.begin(), shape.end() - 1, std::ostream_iterator<size_t>(input_shape, ","));
                         input_shape << shape.back();
-                        slog::info << " " << item.first << " : " << get_shape_string(item.second.data_shape);
+                        slog::info << " " << item.first << " : " << get_shape_string(item.second.tests[i].data_shape);
                     }
                     slog::info << slog::endl;
 

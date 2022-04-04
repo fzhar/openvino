@@ -5,36 +5,53 @@
 #include "inputs_full_cfg.hpp"
 #include "samples\slog.hpp"
 
-bool TestCfg::looks_like_image() const {
-    if ((input_cfg.layout != "NCHW") && (input_cfg.layout != "NHWC") && (input_cfg.layout != "CHW") &&
-        (input_cfg.layout != "HWC"))
+bool InputCfg::looks_like_image() const {
+    if ((layout != "NCHW") && (layout != "NHWC") && (layout != "CHW") &&
+        (layout != "HWC"))
         return false;
-    // If data_shape is still empty, assume this is still an Image and tensor shape will be filled later
-    return (data_shape.empty() || channels() == 3);
+
+    size_t index = -1;
+    try {
+        index = layout.get_index_by_name("N");
+    } catch (...) {
+    }
+
+    // If shape is does not contain static channles value, assume this is still an Image
+    return index >= 0 && (partial_shape[index].is_dynamic() || partial_shape[index].get_min_length() == 3);
 }
-bool TestCfg::looks_like_image_info() const {
-    if (input_cfg.layout != "NC")
+
+bool InputCfg::looks_like_image_info() const {
+    if (layout != "NC")
         return false;
-    return (channels() >= 2);
+    size_t index = -1;
+    try {
+        index = layout.get_index_by_name("N");
+    } catch (...) {
+    }
+    return index >= 0 && (partial_shape[index].is_dynamic() || partial_shape[index].get_min_length() >= 2);
 }
 size_t TestCfg::width() const {
-    return data_shape.at(ov::layout::width_idx(input_cfg.layout));
+    return data_shape.at(ov::layout::width_idx(input_cfg().layout));
 }
 size_t TestCfg::height() const {
-    return data_shape.at(ov::layout::height_idx(input_cfg.layout));
+    return data_shape.at(ov::layout::height_idx(input_cfg().layout));
 }
 size_t TestCfg::channels() const {
-    return data_shape.at(ov::layout::channels_idx(input_cfg.layout));
+    return data_shape.at(ov::layout::channels_idx(input_cfg().layout));
 }
 size_t TestCfg::batch() const {
-    return data_shape.at(ov::layout::batch_idx(input_cfg.layout));
+    return data_shape.at(ov::layout::batch_idx(input_cfg().layout));
 }
 size_t TestCfg::depth() const {
-    return data_shape.at(ov::layout::depth_idx(input_cfg.layout));
+    return data_shape.at(ov::layout::depth_idx(input_cfg().layout));
 }
 
 bool TestCfg::has_batch() const {
-    return ov::layout::has_batch(input_cfg.layout));
+    return input_cfg().has_batch();
+}
+
+bool InputCfg::has_batch() const {
+    return ov::layout::has_batch(layout);
 }
 
 std::vector<size_t> InputsFullCfg::get_batch_sizes() {
@@ -51,7 +68,7 @@ std::vector<size_t> InputsFullCfg::get_batch_sizes() {
         }
         for (int test_num = 0; test_num < get_tests_count(); test_num++) {
             if (batches[test_num] == 0) {
-                slog::warn << "No batch dimension wa/s found at any input for test " + std::to_string(test_num) +
+                slog::warn << "No batch dimension was found at any input for test " + std::to_string(test_num) +
                                   ", asssuming batch to be 1. Beware: this might affect "
                                   "FPS calculation."
                            << slog::endl;

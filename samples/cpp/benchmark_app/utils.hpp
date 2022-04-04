@@ -82,11 +82,8 @@ std::map<std::string, std::vector<std::string>> parse_input_parameters(const std
 /// <param name="mean_string">command-line imean string</param>
 /// <param name="input_info">inputs vector obtained from ov::Model</param>
 /// <param name="reshape_required">returns true to this parameter if reshape is required</param>
-/// <returns>vector of InputCfg elements.
-/// Each element is a configuration item for every test configuration case
-/// (number of cases is calculated basing on data_shape and other parameters).
-/// Each element is a map (input_name, configuration) containing data for each input</returns>
-std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
+/// <returns>Inputs full configuration sttruscture containing general configuration for each input and particular data for each test.</returns>
+InputsFullCfg get_inputs_info(const std::string& shape_string,
                                                        const std::string& layout_string,
                                                        const size_t batch_size,
                                                        const std::string& data_shapes_string,
@@ -107,12 +104,8 @@ std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
 /// <param name="mean_string">command-line imean string</param>
 /// <param name="input_info">inputs vector obtained from ov::Model</param>
 /// <param name="reshape_required">returns true to this parameter if reshape is required</param>
-/// <returns>vector of InputCfg elements.
-/// Each element is a configuration item for every test configuration case
-/// (number of cases is calculated basing on data_shape and other parameters).
-/// Each element is a map (input_name, configuration) containing data for each
-/// input</returns>
-std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
+/// <returns>Inputs full configuration sttruscture containing general configuration for each input and particular data for each test</returns>
+InputsFullCfg get_inputs_info(const std::string& shape_string,
                                                        const std::string& layout_string,
                                                        const size_t batch_size,
                                                        const std::string& data_shapes_string,

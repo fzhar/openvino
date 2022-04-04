@@ -141,7 +141,7 @@ std::string get_shapes_string(const PartialShapes& shapes) {
 }
 
 std::map<std::string, std::vector<float>> parse_scale_or_mean(const std::string& scale_mean,
-                                                              const InputsFullCfg& inputs_info) {
+                                                              const std::vector<ov::Output<const ov::Node>>& inputs_info) {
     //  Format: data:[255,255,255],info[255,255,255]
     std::map<std::string, std::vector<float>> return_value;
 
@@ -156,14 +156,11 @@ std::map<std::string, std::vector<float>> parse_scale_or_mean(const std::string&
         auto input_value = split_float(input_value_string, ',');
 
         if (!input_name.empty()) {
-            if (inputs_info.count(input_name)) {
-                return_value[input_name] = input_value;
-            }
-            // ignore wrong input name
+            return_value[parameter_name_to_tensor_name(input_name,inputs_info)] = input_value;
         } else {
-            for (auto& item : inputs_info) {
-                if (item.second.is_image())
-                    return_value[item.first] = input_value;
+            // ignore wrong input name
+            for (const auto& item : inputs_info) {
+                    return_value[item.get_any_name()] = input_value;
             }
             search_string.clear();
             break;
@@ -332,19 +329,21 @@ std::map<std::string, std::vector<std::string>> parse_input_parameters(
     return return_value;
 }
 
-std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
-                                                       const std::string& layout_string,
-                                                       const size_t batch_size,
-                                                       const std::string& data_shapes_string,
-                                                       const std::map<std::string, std::vector<std::string>>& fileNames,
-                                                       const std::string& scale_string,
-                                                       const std::string& mean_string,
-                                                       const std::vector<ov::Output<const ov::Node>>& input_info,
-                                                       bool& reshape_required) {
+InputsFullCfg get_inputs_info(const std::string& shape_string,
+                              const std::string& layout_string,
+                              const size_t batch_size,
+                              const std::string& data_shapes_string,
+                              const std::map<std::string, std::vector<std::string>>& fileNames,
+                              const std::string& scale_string,
+                              const std::string& mean_string,
+                              const std::vector<ov::Output<const ov::Node>>& input_info,
+                              bool& reshape_required) {
     std::map<std::string, std::vector<std::string>> shape_map = parse_input_parameters(shape_string, input_info);
     std::map<std::string, std::vector<std::string>> data_shapes_map =
         parse_input_parameters(data_shapes_string, input_info);
     std::map<std::string, std::vector<std::string>> layout_map = parse_input_parameters(layout_string, input_info);
+    std::map<std::string, std::vector<float>> scale_map = parse_scale_or_mean(scale_string, input_info);
+    std::map<std::string, std::vector<float>> mean_map = parse_scale_or_mean(mean_string, input_info);
 
     size_t min_size = 1, max_size = 1;
     if (!data_shapes_map.empty()) {
@@ -398,80 +397,79 @@ std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
         currentFileCounters[item.get_any_name()] = 0;
     }
 
-    std::vector<InputCfg> info_maps;
-    for (size_t i = 0; i < min_size; ++i) {
-        InputCfg info_map;
+    InputsFullCfg ret_val;
+    bool is_there_at_least_one_batch_dim = false;
+    for (auto& item : input_info) {
+        InputCfg info;
+        auto name = item.get_any_name();
 
-        bool is_there_at_least_one_batch_dim = false;
-        for (auto& item : input_info) {
-            InputCfg info;
-            auto name = item.get_any_name();
-
-            // Layout
-            if (layout_map.count(name)) {
-                if (layout_map.at(name).size() > 1) {
-                    throw std::logic_error(
-                        "layout command line parameter doesn't support multiple layouts for one input.");
-                }
-                info.layout = ov::Layout(layout_map.at(name)[0]);
-                // reshape_required = true;
-            } else {
-                info.layout = dynamic_cast<const ov::op::v0::Parameter&>(*item.get_node()).get_layout();
+        // Layout
+        if (layout_map.count(name)) {
+            if (layout_map.at(name).size() > 1) {
+                throw std::logic_error("layout command line parameter doesn't support multiple layouts for one input.");
             }
+            info.layout = ov::Layout(layout_map.at(name)[0]);
+            // reshape_required = true;
+        } else {
+            info.layout = dynamic_cast<const ov::op::v0::Parameter&>(*item.get_node()).get_layout();
+        }
 
-            // Calculating default layout values if needed
-            std::string newLayout = "";
-            if (info.layout.empty()) {
-                switch (item.get_partial_shape().size()) {
-                case 3:
-                    newLayout = (item.get_partial_shape()[2].get_max_length() <= 4 &&
-                                 item.get_partial_shape()[0].get_max_length() > 4)
-                                    ? "HWC"
-                                    : "CHW";
-                    break;
-                case 4:
-                    // Rough check for layout type, basing on max number of image channels
-                    newLayout = (item.get_partial_shape()[3].get_max_length() <= 4 &&
-                                 item.get_partial_shape()[1].get_max_length() > 4)
-                                    ? "NHWC"
-                                    : "NCHW";
-                    break;
-                }
-                if (newLayout != "") {
-                    info.layout = ov::Layout(newLayout);
-                }
-                if (info_maps.empty()) {  // Show warnings only for 1st test case config, as for other test cases
-                                          // they will be the same
-                    slog::warn << item.get_any_name() << ": layout is not set explicitly"
-                               << (newLayout != "" ? std::string(", so it is defaulted to ") + newLayout : "")
-                               << ". It is STRONGLY recommended to set layout manually to avoid further issues."
-                               << slog::endl;
-                }
+        // Calculating default layout values if needed
+        std::string newLayout = "";
+        if (info.layout.empty()) {
+            switch (item.get_partial_shape().size()) {
+            case 3:
+                newLayout = (item.get_partial_shape()[2].get_max_length() <= 4 &&
+                             item.get_partial_shape()[0].get_max_length() > 4)
+                                ? "HWC"
+                                : "CHW";
+                break;
+            case 4:
+                // Rough check for layout type, basing on max number of image channels
+                newLayout = (item.get_partial_shape()[3].get_max_length() <= 4 &&
+                             item.get_partial_shape()[1].get_max_length() > 4)
+                                ? "NHWC"
+                                : "NCHW";
+                break;
             }
-
-            // Precision
-            info.type = item.get_element_type();
-            // Partial Shape
-            if (shape_map.count(name)) {
-                if (shape_map.at(name).size() > 1) {
-                    throw std::logic_error(
-                        "shape command line parameter doesn't support multiple shapes for one input.");
-                }
-                info.partialShape = parse_partial_shape(shape_map.at(name)[0]);
-                reshape_required = true;
-            } else {
-                info.partialShape = item.get_partial_shape();
+            if (newLayout != "") {
+                info.layout = ov::Layout(newLayout);
             }
+            if (!ret_val.get_tests_count()) {  // Show warnings only for 1st test case config, as for other test cases
+                                               // they will be the same
+                slog::warn << item.get_any_name() << ": layout is not set explicitly"
+                           << (newLayout != "" ? std::string(", so it is defaulted to ") + newLayout : "")
+                           << ". It is STRONGLY recommended to set layout manually to avoid further issues."
+                           << slog::endl;
+            }
+        }
 
-            // Files might be mapped without input name. In case of only one input we may map them to the only input
-            // directly
-            std::string filesInputName =
-                fileNames.size() == 1 && input_info.size() == 1 && fileNames.begin()->first == "" ? "" : name;
+        // Precision
+        info.type = item.get_element_type();
+        // Partial Shape
+        if (shape_map.count(name)) {
+            if (shape_map.at(name).size() > 1) {
+                throw std::logic_error("shape command line parameter doesn't support multiple shapes for one input.");
+            }
+            info.partial_shape = parse_partial_shape(shape_map.at(name)[0]);
+            reshape_required = true;
+        } else {
+            info.partial_shape = item.get_partial_shape();
+        }
 
+        // Files might be mapped without input name. In case of only one input we may map them to the only input
+        // directly
+        std::string filesInputName =
+            fileNames.size() == 1 && input_info.size() == 1 && fileNames.begin()->first == "" ? "" : name;
+
+        for (size_t i = 0; i < min_size; ++i) {
+            info.tests.emplace_back(info);
+            TestCfg& test = info.tests.back();
+                
             // Tensor Shape
-            if (info.partialShape.is_dynamic() && data_shapes_map.count(name)) {
-                info.data_shape = parse_data_shape(data_shapes_map.at(name)[i % data_shapes_map.at(name).size()]);
-            } else if (info.partialShape.is_dynamic() && fileNames.count(filesInputName) && info.is_image()) {
+            if (info.partial_shape.is_dynamic() && data_shapes_map.count(name)) {
+                test.data_shape = parse_data_shape(data_shapes_map.at(name)[i % data_shapes_map.at(name).size()]);
+            } else if (info.partial_shape.is_dynamic() && fileNames.count(filesInputName) && info.looks_like_image()) {
                 auto& namesVector = fileNames.at(filesInputName);
                 if (contains_binaries(namesVector)) {
                     throw std::logic_error("Input files list for input " + item.get_any_name() +
@@ -479,20 +477,20 @@ std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
                                            "be defined explicitly (using -data_shape).");
                 }
 
-                info.data_shape = ov::Shape(info.partialShape.size(), 0);
-                for (int i = 0; i < info.partialShape.size(); i++) {
-                    auto& dim = info.partialShape[i];
+                test.data_shape = ov::Shape(info.partial_shape.size(), 0);
+                for (int i = 0; i < info.partial_shape.size(); i++) {
+                    auto& dim = info.partial_shape[i];
                     if (dim.is_static()) {
-                        info.data_shape[i] = dim.get_length();
+                        test.data_shape[i] = dim.get_length();
                     }
                 }
 
                 size_t tensorBatchSize = std::max(batch_size, (size_t)1);
-                if (ov::layout::has_batch(info.layout)) {
-                    if (info.batch()) {
-                        tensorBatchSize = std::max(tensorBatchSize, info.batch());
+                if (test.has_batch()) {
+                    if (test.batch()) {
+                        tensorBatchSize = std::max(tensorBatchSize, test.batch());
                     } else {
-                        info.data_shape[ov::layout::batch_idx(info.layout)] = tensorBatchSize;
+                        test.data_shape[ov::layout::batch_idx(info.layout)] = tensorBatchSize;
                     }
                 }
 
@@ -516,14 +514,14 @@ std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
                 }
                 currentFileCounters[item.get_any_name()] = fileIdx;
 
-                if (!info.data_shape[ov::layout::height_idx(info.layout)]) {
-                    info.data_shape[ov::layout::height_idx(info.layout)] = h;
+                if (!test.data_shape[ov::layout::height_idx(info.layout)]) {
+                    test.data_shape[ov::layout::height_idx(info.layout)] = h;
                 }
-                if (!info.data_shape[ov::layout::width_idx(info.layout)]) {
-                    info.data_shape[ov::layout::width_idx(info.layout)] = w;
+                if (!test.data_shape[ov::layout::width_idx(info.layout)]) {
+                    test.data_shape[ov::layout::width_idx(info.layout)] = w;
                 }
 
-                if (std::any_of(info.data_shape.begin(), info.data_shape.end(), [](size_t d) {
+                if (std::any_of(test.data_shape.begin(), test.data_shape.end(), [](size_t d) {
                         return d == 0;
                     })) {
                     throw std::logic_error("Not enough information in shape and image to determine tensor shape "
@@ -531,8 +529,8 @@ std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
                                            item.get_any_name() + ", File name: " + namesVector[fileIdx - 1]);
                 }
 
-            } else if (info.partialShape.is_static()) {
-                info.data_shape = info.partialShape.get_shape();
+            } else if (info.partial_shape.is_static()) {
+                test.data_shape = info.partial_shape.get_shape();
                 if (data_shapes_map.find(name) != data_shapes_map.end()) {
                     throw std::logic_error(
                         "Network's input \"" + name +
@@ -545,67 +543,74 @@ std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
                 throw std::logic_error("-i or -data_shape command line parameter should be set for all inputs in case "
                                        "of network with dynamic shapes.");
             }
-
-            // Update shape with batch if needed (only in static shape case)
-            // Update blob shape only not affecting network shape to trigger dynamic batch size case
-            if (batch_size != 0) {
-                if (ov::layout::has_batch(info.layout)) {
-                    std::size_t batch_index = ov::layout::batch_idx(info.layout);
-                    if (info.data_shape.at(batch_index) != batch_size) {
-                        if (info.partialShape.is_static()) {
-                            info.partialShape[batch_index] = batch_size;
-                        }
-                        info.data_shape[batch_index] = batch_size;
-                        reshape_required = true;
-                        is_there_at_least_one_batch_dim = true;
-                    }
-                } else {
-                    slog::warn << "Input '" << item.get_any_name()
-                               << "' doesn't have batch dimension in layout. -b option will be ignored for this input."
-                               << slog::endl;
-                }
-            }
-            info_map[name] = info;
         }
 
-        if (batch_size > 1 && !is_there_at_least_one_batch_dim) {
-            throw std::runtime_error("-b option is provided in command line, but there's no inputs with batch(B) "
-                                     "dimension in input layout, so batch cannot be set. "
-                                     "You may specify layout explicitly using -layout option.");
+        // Update shape with batch if needed (only in static shape case)
+        // Update blob shape only not affecting network shape to trigger dynamic batch size case
+        if (batch_size != 0) {
+            if (info.has_batch()) {
+                std::size_t batch_index = ov::layout::batch_idx(info.layout);
+                if (info.partial_shape.is_static()) {
+                    if (info.partial_shape[batch_index].get_length() != batch_size) {
+                        info.partial_shape[batch_index] = batch_size;
+                    }
+                    for (auto& test : info.tests) {
+                        if (test.data_shape.at(batch_index) != batch_size) {
+                            test.data_shape[batch_index] = batch_size;
+                        }
+                    }
+                    reshape_required = true;
+                } else {
+                    // Dynamic shape
+                    for (auto& test : info.tests) {
+                        if (test.data_shape.at(batch_index) != batch_size) {
+                            slog::warn
+                                << "One of tests has batch different from -b option for input '" << name
+                                << "'. Input's shape is dynamic. So, -b option will be ignored for that input."
+                                << slog::endl;                            
+                        }
+                    }
+                }
+                is_there_at_least_one_batch_dim = true;
+            } else {
+                slog::warn << "Input '" << name
+                           << "' doesn't have batch dimension in layout. -b option will be ignored for this input."
+                           << slog::endl;
+            }
         }
 
         // Update scale and mean
-        std::map<std::string, std::vector<float>> scale_map = parse_scale_or_mean(scale_string, info_map);
-        std::map<std::string, std::vector<float>> mean_map = parse_scale_or_mean(mean_string, info_map);
+        if (info.looks_like_image()) {
+            info.scale.assign({1, 1, 1});
+            info.mean.assign({0, 0, 0});
 
-        for (auto& item : info_map) {
-            if (item.second.is_image()) {
-                item.second.scale.assign({1, 1, 1});
-                item.second.mean.assign({0, 0, 0});
-
-                if (scale_map.count(item.first)) {
-                    item.second.scale = scale_map.at(item.first);
-                }
-                if (mean_map.count(item.first)) {
-                    item.second.mean = mean_map.at(item.first);
-                }
+            if (scale_map.count(name)) {
+                info.scale = scale_map.at(name);
+            }
+            if (mean_map.count(name)) {
+                info.mean = mean_map.at(name);
             }
         }
-
-        info_maps.push_back(info_map);
+        ret_val[name] = info;
     }
 
-    return info_maps;
+    if (batch_size > 1 && !is_there_at_least_one_batch_dim) {
+        throw std::runtime_error("-b option is provided in command line, but there's no inputs with batch(B) "
+                                 "dimension in input layout, so batch cannot be set. "
+                                 "You may specify layout explicitly using -layout option.");
+    }
+
+    return ret_val;
 }
 
-std::vector<InputCfg> get_inputs_info(const std::string& shape_string,
-                                                       const std::string& layout_string,
-                                                       const size_t batch_size,
-                                                       const std::string& tensors_shape_string,
-                                                       const std::map<std::string, std::vector<std::string>>& fileNames,
-                                                       const std::string& scale_string,
-                                                       const std::string& mean_string,
-                                                       const std::vector<ov::Output<const ov::Node>>& input_info) {
+InputsFullCfg get_inputs_info(const std::string& shape_string,
+                              const std::string& layout_string,
+                              const size_t batch_size,
+                              const std::string& tensors_shape_string,
+                              const std::map<std::string, std::vector<std::string>>& fileNames,
+                              const std::string& scale_string,
+                              const std::string& mean_string,
+                              const std::vector<ov::Output<const ov::Node>>& input_info) {
     bool reshape_required = false;
     return get_inputs_info(shape_string,
                            layout_string,

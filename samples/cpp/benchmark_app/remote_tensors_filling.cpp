@@ -88,7 +88,7 @@ std::map<std::string, ov::TensorVector> get_remote_input_tensors(
             for (auto& test : input.second.tests) {
                 // Fill random
                 slog::info << "Prepare remote blob for input '" << input.first << "' with random values ("
-                           << std::string((test.looks_like_image() ? "image" : "some binary data")) << " is expected)"
+                           << std::string((input.second.looks_like_image() ? "image" : "some binary data")) << " is expected)"
                            << slog::endl;
 
                 // Creating and filling shared buffers
